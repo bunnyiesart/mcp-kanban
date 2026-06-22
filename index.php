@@ -249,12 +249,32 @@
     display: flex;
     flex-direction: column;
     gap: 8px;
-    transition: box-shadow .15s, transform .1s;
+    transition: box-shadow .15s, transform .1s, opacity .15s;
+    cursor: grab;
   }
 
   .card:hover {
     box-shadow: 0 2px 8px rgba(0,0,0,.1), 0 8px 24px rgba(0,0,0,.06);
     transform: translateY(-1px);
+  }
+
+  .card:active { cursor: grabbing; }
+  .card.dragging { opacity: .35; transform: scale(.98); box-shadow: none; }
+
+  .cards.drag-over {
+    background: rgba(94,92,230,.05);
+    outline: 2px dashed rgba(94,92,230,.25);
+    outline-offset: -4px;
+    border-radius: 6px;
+  }
+
+  .card-drop-placeholder {
+    height: 4px;
+    background: var(--accent);
+    border-radius: 2px;
+    opacity: .5;
+    margin: 0 2px;
+    flex-shrink: 0;
   }
 
   .card-title {
@@ -721,8 +741,6 @@ async function render() {
     if (savedW) div.style.width  = savedW + 'px';
     if (savedH) div.style.height = savedH + 'px';
 
-    const otherCols = cols.filter(c => c.id !== col.id);
-
     div.innerHTML = `
       <div class="col-resize-x"      onmousedown="startResize(event,'x')"></div>
       <div class="col-resize-y"      onmousedown="startResize(event,'y')"></div>
@@ -734,8 +752,8 @@ async function render() {
         <button class="btn-del-col" title="Delete column" onclick="openDelColPopup(event,${col.id},${JSON.stringify(col.name)})">×</button>
       </div>
       <div class="col-header-divider"></div>
-      <div class="cards" id="cards-${col.id}">
-        ${col.cards.map(c => cardHtml(c, otherCols)).join('')}
+      <div class="cards" id="cards-${col.id}" data-col-id="${col.id}">
+        ${col.cards.map(c => cardHtml(c)).join('')}
       </div>
     `;
     board.appendChild(div);
@@ -747,11 +765,13 @@ async function render() {
   addBtn.textContent = '+';
   addBtn.addEventListener('click', e => openAddColPopup(e));
   board.appendChild(addBtn);
+
+  setupDragDrop();
 }
 
 const GIT_ICON = `<svg width="10" height="10" viewBox="0 0 16 16" fill="currentColor" style="flex-shrink:0"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>`;
 
-function cardHtml(c, otherCols) {
+function cardHtml(c) {
   const agent = c.agent || 'unknown';
   const dotColor = agentDotColor(agent);
   const titleHtml = c.url
@@ -760,12 +780,9 @@ function cardHtml(c, otherCols) {
   const urlBtn = c.url
     ? `<a class="card-git-btn" href="${esc(c.url)}" target="_blank" rel="noopener">${GIT_ICON} link</a>`
     : `<button class="card-git-btn unset" onclick="openSetUrlPopup(event,${c.id})">+ link</button>`;
-  const moveOpts = otherCols.map(col =>
-    `<button class="btn" onclick="moveCard(${c.id},${col.id})">→ ${esc(col.name)}</button>`
-  ).join('');
   const hasNotes = !!(c.notes && c.notes.trim());
   return `
-    <div class="card" id="card-${c.id}">
+    <div class="card" id="card-${c.id}" draggable="true" data-card-id="${c.id}">
       <div class="card-title">${titleHtml}</div>
       <div class="card-footer">
         <span class="card-id">#${c.id}</span>
@@ -774,7 +791,6 @@ function cardHtml(c, otherCols) {
           <span>${esc(agent)}</span>
         </div>
         <div class="card-actions">
-          ${moveOpts}
           <button class="btn" onclick="archiveCard(${c.id})">archive</button>
           <button class="btn btn-danger" onclick="delCard(${c.id})">del</button>
         </div>
@@ -952,6 +968,71 @@ function openDelColPopup(e, id, name) {
     flash('column deleted');
     render();
   });
+}
+
+// ── Drag and drop ──
+let _dragId = null;
+let _placeholder = null;
+
+function setupDragDrop() {
+  document.querySelectorAll('.card').forEach(card => {
+    card.addEventListener('dragstart', e => {
+      _dragId = parseInt(card.dataset.cardId);
+      card.classList.add('dragging');
+      e.dataTransfer.effectAllowed = 'move';
+      // prevent drag starting from interactive children
+      if (e.target.tagName === 'TEXTAREA' || e.target.tagName === 'A' || e.target.tagName === 'BUTTON') {
+        e.preventDefault();
+      }
+    });
+    card.addEventListener('dragend', () => {
+      card.classList.remove('dragging');
+      if (_placeholder) { _placeholder.remove(); _placeholder = null; }
+      document.querySelectorAll('.cards').forEach(z => z.classList.remove('drag-over'));
+      _dragId = null;
+    });
+  });
+
+  document.querySelectorAll('.cards').forEach(zone => {
+    zone.addEventListener('dragover', e => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      zone.classList.add('drag-over');
+
+      // position placeholder between cards
+      const afterEl = getDragAfterElement(zone, e.clientY);
+      if (!_placeholder) {
+        _placeholder = document.createElement('div');
+        _placeholder.className = 'card-drop-placeholder';
+      }
+      if (afterEl) zone.insertBefore(_placeholder, afterEl);
+      else zone.appendChild(_placeholder);
+    });
+    zone.addEventListener('dragleave', e => {
+      if (!zone.contains(e.relatedTarget)) {
+        zone.classList.remove('drag-over');
+        if (_placeholder && _placeholder.parentNode === zone) _placeholder.remove();
+      }
+    });
+    zone.addEventListener('drop', e => {
+      e.preventDefault();
+      zone.classList.remove('drag-over');
+      if (_placeholder) { _placeholder.remove(); _placeholder = null; }
+      if (_dragId === null) return;
+      const colId = parseInt(zone.dataset.colId);
+      moveCard(_dragId, colId);
+    });
+  });
+}
+
+function getDragAfterElement(zone, y) {
+  const cards = [...zone.querySelectorAll('.card:not(.dragging)')];
+  return cards.reduce((closest, child) => {
+    const box = child.getBoundingClientRect();
+    const offset = y - box.top - box.height / 2;
+    if (offset < 0 && offset > closest.offset) return { offset, element: child };
+    return closest;
+  }, { offset: Number.NEGATIVE_INFINITY }).element;
 }
 
 // ── Resize (x, y, xy) ──
