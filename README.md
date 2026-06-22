@@ -186,7 +186,40 @@ curl -s -X POST "$BASE?action=move_card" \
 
 A Python MCP server in `mcp/` that wraps the REST API as tools for Claude Code, Claude Desktop, and any other MCP-compatible client.
 
-### Install
+### Docker (recommended)
+
+Pre-built image is published to GitHub Container Registry on every push to `main`:
+
+```bash
+docker pull ghcr.io/bunnyiesart/mcp-kanban:latest
+```
+
+Run it as a stdio MCP server (pass `-i` so stdin/stdout stay open):
+
+```bash
+docker run -i \
+  -e KANBAN_URL=http://your-server \
+  -e KANBAN_AGENT=claude \
+  ghcr.io/bunnyiesart/mcp-kanban:latest
+```
+
+In `~/.claude/settings.json`:
+
+```json
+{
+  "mcpServers": {
+    "kanban": {
+      "command": "docker",
+      "args": ["run", "-i", "--rm",
+               "-e", "KANBAN_URL=http://your-server",
+               "-e", "KANBAN_AGENT=claude",
+               "ghcr.io/bunnyiesart/mcp-kanban:latest"]
+    }
+  }
+}
+```
+
+### Install (without Docker)
 
 ```bash
 pip install -r mcp/requirements.txt
