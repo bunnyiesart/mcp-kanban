@@ -1,8 +1,15 @@
 #!/bin/bash
 set -e
 
-KANBAN_DIR=/home/gabriel/kanban
-KANBAN_USER=gabriel
+# Detect install path from where this script lives
+KANBAN_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Detect the owner of that directory as the runtime user
+KANBAN_USER="$(stat -c '%U' "$KANBAN_DIR")"
+
+echo "==> AgentBoard setup"
+echo "    Directory : $KANBAN_DIR"
+echo "    User      : $KANBAN_USER"
+echo ""
 
 echo "==> Installing nginx and php-fpm..."
 pacman -S --noconfirm nginx php-fpm
@@ -51,25 +58,21 @@ http {
         index index.html;
         charset utf-8;
 
-        # Security headers
-        add_header X-Content-Type-Options  "nosniff"                            always;
-        add_header X-Frame-Options         "DENY"                               always;
-        add_header Referrer-Policy         "strict-origin-when-cross-origin"    always;
+        add_header X-Content-Type-Options  "nosniff"                          always;
+        add_header X-Frame-Options         "DENY"                             always;
+        add_header Referrer-Policy         "strict-origin-when-cross-origin"  always;
         add_header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self'; frame-ancestors 'none'" always;
 
-        # Serve static frontend
         location / {
             try_files \$uri \$uri/ /index.html;
         }
 
-        # Route API calls to the backend PHP file
         location = /api.php {
             fastcgi_pass unix:/run/php-fpm/kanban.sock;
             fastcgi_param SCRIPT_FILENAME $KANBAN_DIR/backend/api.php;
             include fastcgi_params;
         }
 
-        # Block direct access to sensitive files
         location ~ \.(db|env)$ { deny all; }
     }
 }
@@ -87,11 +90,14 @@ fi
 
 echo "==> Setting permissions..."
 mkdir -p /run/php-fpm /var/log/php-fpm
-chmod 755 /home/gabriel        # nginx needs to traverse into home
-chmod 755 $KANBAN_DIR
+
+# nginx/http needs execute permission on every directory in the path
+chmod o+x "$(dirname "$KANBAN_DIR")"
+chmod 755 "$KANBAN_DIR"
+
 if [ -f "$KANBAN_DIR/kanban.db" ]; then
-    chmod 664 $KANBAN_DIR/kanban.db
-    chown $KANBAN_USER:$KANBAN_USER $KANBAN_DIR/kanban.db
+    chmod 664 "$KANBAN_DIR/kanban.db"
+    chown "$KANBAN_USER:$KANBAN_USER" "$KANBAN_DIR/kanban.db"
 fi
 
 echo "==> Enabling and starting services..."

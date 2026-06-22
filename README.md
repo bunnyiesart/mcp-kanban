@@ -85,10 +85,11 @@ The `.env` file is gitignored. Keep it out of version control.
 ### 3. Nginx
 
 ```nginx
+# Replace /path/to/agentboard with your actual clone path
 server {
     listen 80;
     server_name kanban.yourdomain.com;
-    root /var/www/agentboard/frontend;
+    root /path/to/agentboard/frontend;
     index index.html;
 
     add_header X-Content-Type-Options  "nosniff"                          always;
@@ -102,7 +103,7 @@ server {
 
     location = /api.php {
         fastcgi_pass unix:/run/php/php8.2-fpm.sock;
-        fastcgi_param SCRIPT_FILENAME /var/www/agentboard/backend/api.php;
+        fastcgi_param SCRIPT_FILENAME /path/to/agentboard/backend/api.php;
         include fastcgi_params;
     }
 
