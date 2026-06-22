@@ -136,6 +136,40 @@ Navigate to `http://your-server`. The lock screen asks for the API key. The data
 
 ---
 
+## Managing the API key
+
+### Show the current key
+
+```bash
+grep KANBAN_API_KEY /path/to/agentboard/.env | cut -d= -f2
+```
+
+### Rotate the key (generates a new one)
+
+```bash
+sudo bash rotate-key.sh
+```
+
+The script updates `.env`, reloads php-fpm, and prints the new key. All active browser sessions will hit the lock screen on their next API call — they just need to re-enter the new key.
+
+### Rotate to a specific key
+
+Useful when pulling a key from a secrets manager or a team vault:
+
+```bash
+sudo KANBAN_API_KEY=your-key bash rotate-key.sh
+```
+
+### Use your own key during initial setup
+
+```bash
+sudo KANBAN_API_KEY=your-key bash setup-server.sh
+```
+
+If `KANBAN_API_KEY` is set in the environment, `setup-server.sh` uses it instead of generating one. If `.env` already exists, setup always skips key generation.
+
+---
+
 ## MCP server
 
 The MCP server in `mcp/` wraps the REST API as tools for Claude Code, Claude Desktop, and any other MCP client. It also exposes two resources — a behavior guide and a full API reference — that AI agents can read at session start.

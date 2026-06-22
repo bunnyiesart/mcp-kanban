@@ -80,8 +80,13 @@ EOF
 
 echo "==> Generating API key..."
 if [ ! -f "$KANBAN_DIR/.env" ]; then
-    API_KEY=$(openssl rand -hex 32)
-    echo "KANBAN_API_KEY=$API_KEY" > "$KANBAN_DIR/.env"
+    # Use a pre-set key if provided, otherwise generate one
+    if [ -n "$KANBAN_API_KEY" ]; then
+        echo "    Using provided KANBAN_API_KEY"
+    else
+        KANBAN_API_KEY=$(openssl rand -hex 32)
+    fi
+    echo "KANBAN_API_KEY=$KANBAN_API_KEY" > "$KANBAN_DIR/.env"
     chown "$KANBAN_USER:$KANBAN_USER" "$KANBAN_DIR/.env"
     chmod 600 "$KANBAN_DIR/.env"
 else
