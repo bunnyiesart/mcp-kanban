@@ -1,0 +1,3 @@
+kanban.db
+*.db-shm
+*.db-wal
