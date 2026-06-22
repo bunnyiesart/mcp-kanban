@@ -257,6 +257,8 @@ header("Content-Security-Policy: default-src 'self'; script-src 'unsafe-inline';
     gap: 8px;
     transition: box-shadow .15s, transform .1s, opacity .15s;
     cursor: grab;
+    user-select: none;
+    -webkit-user-select: none;
   }
 
   .card:hover {
@@ -1085,8 +1087,9 @@ function setupDragDrop() {
     card.addEventListener('dragstart', e => {
       if (e.target.tagName === 'TEXTAREA') { e.preventDefault(); return; }
       _dragId = parseInt(card.dataset.cardId);
-      card.classList.add('dragging');
       e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', String(_dragId));
+      card.classList.add('dragging');
     });
     card.addEventListener('dragend', () => {
       card.classList.remove('dragging');
