@@ -2,9 +2,9 @@
 require_once __DIR__ . '/db.php';
 
 header('Content-Type: application/json');
-header('Access-Control-Allow-Origin: *');
-header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type');
+header('X-Content-Type-Options: nosniff');
+header('X-Frame-Options: DENY');
+header('Referrer-Policy: strict-origin-when-cross-origin');
 
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     http_response_code(204);
@@ -31,6 +31,12 @@ function json_err(string $msg, int $status = 400): void {
     echo json_encode(['error' => $msg]);
     exit;
 }
+
+// ── Auth ──────────────────────────────────────────────────────────────────────
+if (API_KEY === '') json_err('Server misconfigured: KANBAN_API_KEY not set', 503);
+$provided = $_SERVER['HTTP_X_API_KEY'] ?? '';
+if ($provided === '' || !hash_equals(API_KEY, $provided)) json_err('Unauthorized', 401);
+// ─────────────────────────────────────────────────────────────────────────────
 
 try {
     $db = db();
@@ -83,7 +89,7 @@ try {
         json_ok(['ok' => true]);
     }
 
-    // POST update_card — { id, title?, agent? }
+    // POST update_card — { id, title?, notes?, url?, agent? }
     if ($method === 'POST' && $action === 'update_card') {
         $id    = (int)($body['id'] ?? 0);
         if ($id < 1) json_err('id is required');

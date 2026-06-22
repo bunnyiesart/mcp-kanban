@@ -6,12 +6,14 @@ from mcp.server.fastmcp import FastMCP
 _base_url = os.environ.get("KANBAN_URL", "http://localhost").rstrip("/")
 _api = _base_url + "/api.php"
 _agent = os.environ.get("KANBAN_AGENT", "claude")
+_api_key = os.environ.get("KANBAN_API_KEY", "")
+_headers = {"X-Api-Key": _api_key} if _api_key else {}
 
 mcp = FastMCP("kanban")
 
 
 def _get(action: str) -> dict | list:
-    r = httpx.get(_api, params={"action": action}, timeout=10)
+    r = httpx.get(_api, params={"action": action}, headers=_headers, timeout=10)
     data = r.json()
     if r.is_error or "error" in data:
         raise RuntimeError(data.get("error", f"HTTP {r.status_code}"))
@@ -19,7 +21,7 @@ def _get(action: str) -> dict | list:
 
 
 def _post(action: str, payload: dict) -> dict:
-    r = httpx.post(_api, params={"action": action}, json=payload, timeout=10)
+    r = httpx.post(_api, params={"action": action}, json=payload, headers=_headers, timeout=10)
     data = r.json()
     if r.is_error or "error" in data:
         raise RuntimeError(data.get("error", f"HTTP {r.status_code}"))

@@ -1,3 +1,9 @@
+<?php
+header('X-Content-Type-Options: nosniff');
+header('X-Frame-Options: DENY');
+header('Referrer-Policy: strict-origin-when-cross-origin');
+header("Content-Security-Policy: default-src 'self'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; frame-ancestors 'none'");
+?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -656,9 +662,77 @@
   ::-webkit-scrollbar-track { background: transparent; }
   ::-webkit-scrollbar-thumb { background: rgba(0,0,0,.12); border-radius: 10px; }
   ::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,.2); }
+
+  /* ── Lock screen ── */
+  #lock {
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    background: var(--ground);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .lock-box {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 32px 28px 28px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    width: 300px;
+    box-shadow: var(--shadow);
+  }
+  .lock-title { font-size: 15px; font-weight: 600; color: var(--text); }
+  .lock-sub   { font-size: 12px; color: var(--text-2); margin-top: -4px; line-height: 1.5; }
+  .lock-input {
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family: var(--font);
+    font-size: 13px;
+    padding: 7px 10px;
+    border-radius: 8px;
+    outline: none;
+    width: 100%;
+    transition: border-color .15s, box-shadow .15s;
+  }
+  .lock-input:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(94,92,230,.1);
+    background: var(--surface);
+  }
+  .lock-err { font-size: 12px; color: var(--red); display: none; }
+  .lock-btn {
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    padding: 8px 16px;
+    font-family: var(--font);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    align-self: flex-end;
+    transition: opacity .15s;
+  }
+  .lock-btn:hover:not(:disabled) { opacity: .85; }
+  .lock-btn:disabled { opacity: .5; cursor: default; }
 </style>
 </head>
 <body>
+
+<div id="lock">
+  <div class="lock-box">
+    <div class="lock-title">BlueTeam Kanban</div>
+    <div class="lock-sub">Enter the team API key to access the board.</div>
+    <input id="lock-key" class="lock-input" type="password" placeholder="API key…"
+           autocomplete="off" onkeydown="if(event.key==='Enter')tryUnlock()">
+    <div id="lock-err" class="lock-err">Wrong key — try again.</div>
+    <button id="lock-btn" class="lock-btn" onclick="tryUnlock()">Unlock</button>
+  </div>
+</div>
 
 <div class="app">
   <div class="topbar">
@@ -683,6 +757,7 @@
 
 <script>
 const API = 'api.php';
+let _key = sessionStorage.getItem('kanban_key') || '';
 
 const COL_TINTS = [
   { bg: '#F0F0F8', border: '#E2E2EE', dot: '#AEAEE8', label: '#6E6EAA' },
@@ -702,10 +777,41 @@ function agentDotColor(name) {
 
 async function api(action, body = null) {
   const opts = body
-    ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }
-    : { method: 'GET' };
+    ? { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Api-Key': _key }, body: JSON.stringify(body) }
+    : { method: 'GET', headers: { 'X-Api-Key': _key } };
   const r = await fetch(`${API}?action=${action}`, opts);
+  if (r.status === 401) { showLock(); return { error: 'Unauthorized' }; }
   return r.json();
+}
+
+function showLock() {
+  _key = '';
+  sessionStorage.removeItem('kanban_key');
+  document.getElementById('lock').style.display = 'flex';
+}
+
+async function tryUnlock() {
+  const input = document.getElementById('lock-key');
+  const err   = document.getElementById('lock-err');
+  const btn   = document.getElementById('lock-btn');
+  const candidate = input.value.trim();
+  if (!candidate) return;
+  btn.disabled = true;
+  btn.textContent = '…';
+  const r = await fetch(`${API}?action=board`, { headers: { 'X-Api-Key': candidate } });
+  btn.disabled = false;
+  btn.textContent = 'Unlock';
+  if (r.status === 401 || r.status === 403) {
+    err.style.display = 'block';
+    input.value = '';
+    input.focus();
+    return;
+  }
+  err.style.display = 'none';
+  _key = candidate;
+  sessionStorage.setItem('kanban_key', _key);
+  document.getElementById('lock').style.display = 'none';
+  render();
 }
 
 function flash(msg) {
@@ -1076,7 +1182,11 @@ function esc(s) {
     .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 }
 
-render();
+// Init — show board if key already in sessionStorage, else show lock
+if (_key) {
+  document.getElementById('lock').style.display = 'none';
+  render();
+}
 </script>
 </body>
 </html>

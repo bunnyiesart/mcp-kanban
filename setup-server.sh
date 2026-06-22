@@ -68,6 +68,16 @@ http {
 }
 EOF
 
+echo "==> Generating API key..."
+if [ ! -f "$KANBAN_DIR/.env" ]; then
+    API_KEY=$(openssl rand -hex 32)
+    echo "KANBAN_API_KEY=$API_KEY" > "$KANBAN_DIR/.env"
+    chown "$KANBAN_USER:$KANBAN_USER" "$KANBAN_DIR/.env"
+    chmod 600 "$KANBAN_DIR/.env"
+else
+    echo "    .env already exists, skipping key generation"
+fi
+
 echo "==> Setting permissions..."
 mkdir -p /run/php-fpm /var/log/php-fpm
 chmod 755 /home/gabriel        # nginx needs to traverse into home
@@ -80,6 +90,12 @@ systemctl enable --now php-fpm nginx
 
 echo ""
 echo "Done! Kanban is running at http://$(hostname -I | awk '{print $1}')"
+echo ""
+echo "Team API key (share this with teammates):"
+grep KANBAN_API_KEY "$KANBAN_DIR/.env" | cut -d= -f2
+echo ""
+echo "MCP config for ~/.claude/settings.json:"
+echo "  \"KANBAN_API_KEY\": \"$(grep KANBAN_API_KEY "$KANBAN_DIR/.env" | cut -d= -f2)\""
 EOF
 
 chmod +x /home/gabriel/kanban/setup-server.sh
