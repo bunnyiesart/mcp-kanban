@@ -36,11 +36,11 @@ def board_read() -> dict:
 def card_create(
     title: str,
     column_id: int,
+    agent: str,
     notes: Optional[str] = None,
     url: Optional[str] = None,
-    agent: Optional[str] = None,
 ) -> dict:
-    """Create a new card. agent defaults to the KANBAN_AGENT env var."""
+    """Create a new card. agent must be the name of the person doing the work (ask if unknown)."""
     payload = {
         "title": title,
         "column_id": column_id,
