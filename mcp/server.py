@@ -8,8 +8,25 @@ _api = _base_url + "/api.php"
 _agent = os.environ.get("KANBAN_AGENT", "claude")
 _api_key = os.environ.get("KANBAN_API_KEY", "")
 _headers = {"X-Api-Key": _api_key} if _api_key else {}
+_here = os.path.dirname(os.path.abspath(__file__))
 
 mcp = FastMCP("kanban")
+
+
+# ── Resources (read-only context docs for AI agents) ──────────────────────────
+
+@mcp.resource("kanban://session")
+def session_guide() -> str:
+    """Agent behavior guide — how to act, tag cards, and manage workflow. Read at session start."""
+    with open(os.path.join(_here, "CLAUDE.md")) as f:
+        return f.read()
+
+
+@mcp.resource("kanban://guide")
+def api_guide() -> str:
+    """Full API reference — all actions, field definitions, and curl examples."""
+    with open(os.path.join(_here, "AGENT.md")) as f:
+        return f.read()
 
 
 def _get(action: str) -> dict | list:
