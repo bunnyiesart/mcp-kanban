@@ -881,10 +881,10 @@ function cardHtml(c) {
   const agent = c.agent || 'unknown';
   const dotColor = agentDotColor(agent);
   const titleHtml = c.url
-    ? `<a href="${esc(c.url)}" target="_blank" rel="noopener">${esc(c.title)}</a>`
+    ? `<a href="${esc(c.url)}" target="_blank" rel="noopener" draggable="false">${esc(c.title)}</a>`
     : esc(c.title);
   const urlBtn = c.url
-    ? `<a class="card-git-btn" href="${esc(c.url)}" target="_blank" rel="noopener">${GIT_ICON} link</a>`
+    ? `<a class="card-git-btn" href="${esc(c.url)}" target="_blank" rel="noopener" draggable="false">${GIT_ICON} link</a>`
     : `<button class="card-git-btn unset" onclick="openSetUrlPopup(event,${c.id})">+ link</button>`;
   const hasNotes = !!(c.notes && c.notes.trim());
   return `
@@ -1083,13 +1083,10 @@ let _placeholder = null;
 function setupDragDrop() {
   document.querySelectorAll('.card').forEach(card => {
     card.addEventListener('dragstart', e => {
+      if (e.target.tagName === 'TEXTAREA') { e.preventDefault(); return; }
       _dragId = parseInt(card.dataset.cardId);
       card.classList.add('dragging');
       e.dataTransfer.effectAllowed = 'move';
-      // prevent drag starting from interactive children
-      if (e.target.tagName === 'TEXTAREA' || e.target.tagName === 'A' || e.target.tagName === 'BUTTON') {
-        e.preventDefault();
-      }
     });
     card.addEventListener('dragend', () => {
       card.classList.remove('dragging');
