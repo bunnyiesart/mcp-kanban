@@ -182,17 +182,104 @@ curl -s -X POST "$BASE?action=move_card" \
 
 ---
 
-## MCP server (coming soon)
+## MCP server
 
-The MCP server will expose the board as tools for Claude and other LLM agents:
+A Python MCP server in `mcp/` that wraps the REST API as tools for Claude Code, Claude Desktop, and any other MCP-compatible client.
 
-- `kanban_board` — read the full board
-- `kanban_create_card` — create a new card
-- `kanban_move_card` — move a card between columns
-- `kanban_update_card` — update notes/url/title
-- `kanban_archive_card` — archive a completed card
+### Install
 
-Configuration will live in `mcp/` and will support both stdio and HTTP transports.
+```bash
+pip install -r mcp/requirements.txt
+```
+
+Or with [uv](https://github.com/astral-sh/uv) (no virtualenv needed):
+
+```bash
+uv pip install -r mcp/requirements.txt
+```
+
+### Tools
+
+| Tool | What it does |
+|---|---|
+| `board_read` | Return all columns and active cards |
+| `card_create` | Create a card (title, column_id, notes?, url?) |
+| `card_move` | Move a card to a different column |
+| `card_update` | Update title / notes / url / agent on a card |
+| `card_archive` | Archive a card (hidden, reversible) |
+| `card_unarchive` | Restore an archived card |
+| `card_delete` | Permanently delete a card |
+| `cards_archived` | List all archived cards |
+| `column_add` | Add a new column |
+| `column_delete` | Delete a column and all its cards |
+
+### Claude Code
+
+Add to `~/.claude/settings.json`:
+
+```json
+{
+  "mcpServers": {
+    "kanban": {
+      "command": "python",
+      "args": ["/path/to/mcp-kanban/mcp/server.py"],
+      "env": {
+        "KANBAN_URL": "http://your-server",
+        "KANBAN_AGENT": "claude"
+      }
+    }
+  }
+}
+```
+
+Or with `uv run`:
+
+```json
+{
+  "mcpServers": {
+    "kanban": {
+      "command": "uv",
+      "args": ["run", "--with", "mcp[cli]", "--with", "httpx", "/path/to/mcp-kanban/mcp/server.py"],
+      "env": {
+        "KANBAN_URL": "http://your-server",
+        "KANBAN_AGENT": "claude"
+      }
+    }
+  }
+}
+```
+
+### Claude Desktop
+
+Add to `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) or `%APPDATA%\Claude\claude_desktop_config.json` (Windows):
+
+```json
+{
+  "mcpServers": {
+    "kanban": {
+      "command": "python",
+      "args": ["/path/to/mcp-kanban/mcp/server.py"],
+      "env": {
+        "KANBAN_URL": "http://your-server",
+        "KANBAN_AGENT": "claude"
+      }
+    }
+  }
+}
+```
+
+### Environment variables
+
+| Variable | Default | Description |
+|---|---|---|
+| `KANBAN_URL` | `http://localhost` | Base URL of the PHP board server |
+| `KANBAN_AGENT` | `claude` | Agent name written to cards when none is specified |
+
+### Test with MCP inspector
+
+```bash
+mcp dev mcp/server.py
+```
 
 ---
 
@@ -207,7 +294,9 @@ mcp-kanban/
 ├── schema.sql      # DB schema reference
 ├── seed.php        # Demo data seeder
 ├── AGENT.md        # API guide for AI agents
-└── mcp/            # MCP server (coming soon)
+└── mcp/
+    ├── server.py   # MCP server (stdio transport)
+    └── requirements.txt
 ```
 
 ---
