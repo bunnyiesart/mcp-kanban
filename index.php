@@ -890,7 +890,7 @@ function cardHtml(c) {
     : `<button class="card-git-btn unset" onclick="openSetUrlPopup(event,${c.id})">+ link</button>`;
   const hasNotes = !!(c.notes && c.notes.trim());
   return `
-    <div class="card" id="card-${c.id}" draggable="true" data-card-id="${c.id}">
+    <div class="card" id="card-${c.id}" data-card-id="${c.id}">
       <div class="card-title">${titleHtml}</div>
       <div class="card-footer">
         <span class="card-id">#${c.id}</span>
@@ -1078,56 +1078,96 @@ function openDelColPopup(e, id, name) {
   });
 }
 
-// ── Drag and drop ──
-let _dragId = null;
+// ── Drag and drop (pointer-events) ──
+let _dragId    = null;
+let _dragGhost = null;
+let _dragOffX  = 0, _dragOffY = 0;
+let _pending   = null;   // { cardId, startX, startY, offX, offY }
 let _placeholder = null;
+let _dndReady  = false;  // global listeners added once
 
 function setupDragDrop() {
   document.querySelectorAll('.card').forEach(card => {
-    card.addEventListener('dragstart', e => {
-      if (e.target.tagName === 'TEXTAREA') { e.preventDefault(); return; }
-      _dragId = parseInt(card.dataset.cardId);
-      e.dataTransfer.effectAllowed = 'move';
-      e.dataTransfer.setData('text/plain', String(_dragId));
-      card.classList.add('dragging');
-    });
-    card.addEventListener('dragend', () => {
-      card.classList.remove('dragging');
-      if (_placeholder) { _placeholder.remove(); _placeholder = null; }
-      document.querySelectorAll('.cards').forEach(z => z.classList.remove('drag-over'));
-      _dragId = null;
+    card.addEventListener('pointerdown', e => {
+      if (e.button !== 0) return;
+      if (e.target.tagName === 'TEXTAREA') return;
+      const box = card.getBoundingClientRect();
+      _pending = {
+        cardId: parseInt(card.dataset.cardId),
+        startX: e.clientX, startY: e.clientY,
+        offX: e.clientX - box.left, offY: e.clientY - box.top,
+      };
     });
   });
 
-  document.querySelectorAll('.cards').forEach(zone => {
-    zone.addEventListener('dragover', e => {
-      e.preventDefault();
-      e.dataTransfer.dropEffect = 'move';
-      zone.classList.add('drag-over');
+  if (_dndReady) return;
+  _dndReady = true;
 
-      // position placeholder between cards
-      const afterEl = getDragAfterElement(zone, e.clientY);
+  document.addEventListener('pointermove', e => {
+    // Initiate drag once the pointer moves past a 6px threshold
+    if (_pending && !_dragGhost) {
+      if (Math.abs(e.clientX - _pending.startX) + Math.abs(e.clientY - _pending.startY) < 6) return;
+      const card = document.getElementById('card-' + _pending.cardId);
+      if (!card) { _pending = null; return; }
+      const box  = card.getBoundingClientRect();
+      _dragId   = _pending.cardId;
+      _dragOffX = _pending.offX;
+      _dragOffY = _pending.offY;
+      _pending  = null;
+
+      _dragGhost = card.cloneNode(true);
+      Object.assign(_dragGhost.style, {
+        position: 'fixed', width: box.width + 'px',
+        left: (e.clientX - _dragOffX) + 'px',
+        top:  (e.clientY - _dragOffY) + 'px',
+        opacity: '.85', pointerEvents: 'none',
+        zIndex: '999', transition: 'none',
+        boxShadow: '0 8px 32px rgba(0,0,0,.18)',
+        transform: 'rotate(1.5deg) scale(1.02)',
+        cursor: 'grabbing',
+      });
+      document.body.appendChild(_dragGhost);
+      card.classList.add('dragging');
+    }
+
+    if (!_dragGhost) return;
+    _dragGhost.style.left = (e.clientX - _dragOffX) + 'px';
+    _dragGhost.style.top  = (e.clientY - _dragOffY) + 'px';
+
+    // Highlight drop zone + update placeholder
+    document.querySelectorAll('.cards').forEach(z => z.classList.remove('drag-over'));
+    const below = document.elementFromPoint(e.clientX, e.clientY);
+    const zone  = below && below.closest('.cards');
+    if (zone) {
+      zone.classList.add('drag-over');
       if (!_placeholder) {
         _placeholder = document.createElement('div');
         _placeholder.className = 'card-drop-placeholder';
       }
+      const afterEl = getDragAfterElement(zone, e.clientY);
       if (afterEl) zone.insertBefore(_placeholder, afterEl);
-      else zone.appendChild(_placeholder);
-    });
-    zone.addEventListener('dragleave', e => {
-      if (!zone.contains(e.relatedTarget)) {
-        zone.classList.remove('drag-over');
-        if (_placeholder && _placeholder.parentNode === zone) _placeholder.remove();
-      }
-    });
-    zone.addEventListener('drop', e => {
-      e.preventDefault();
-      zone.classList.remove('drag-over');
-      if (_placeholder) { _placeholder.remove(); _placeholder = null; }
-      if (_dragId === null) return;
-      const colId = parseInt(zone.dataset.colId);
-      moveCard(_dragId, colId);
-    });
+      else         zone.appendChild(_placeholder);
+    } else if (_placeholder) {
+      _placeholder.remove(); _placeholder = null;
+    }
+  });
+
+  document.addEventListener('pointerup', e => {
+    _pending = null;
+    if (!_dragGhost) return;
+
+    _dragGhost.remove(); _dragGhost = null;
+    if (_placeholder) { _placeholder.remove(); _placeholder = null; }
+    document.querySelectorAll('.cards').forEach(z => z.classList.remove('drag-over'));
+    const card = document.getElementById('card-' + _dragId);
+    if (card) card.classList.remove('dragging');
+
+    const below = document.elementFromPoint(e.clientX, e.clientY);
+    const zone  = below && below.closest('.cards');
+    const id    = _dragId;
+    _dragId     = null;
+
+    if (zone) moveCard(id, parseInt(zone.dataset.colId));
   });
 }
 
