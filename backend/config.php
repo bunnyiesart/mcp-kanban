@@ -1,8 +1,8 @@
 <?php
-define('DB_PATH', __DIR__ . '/kanban.db');
+define('DB_PATH', __DIR__ . '/../kanban.db');
 
 // Load .env if present (key=value, # comments)
-$_ef = __DIR__ . '/.env';
+$_ef = __DIR__ . '/../.env';
 if (is_file($_ef)) {
     foreach (file($_ef, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) as $_line) {
         if (!isset($_line[0]) || $_line[0] === '#') continue;

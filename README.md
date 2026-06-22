@@ -88,18 +88,25 @@ The `.env` file is gitignored. Keep it out of version control.
 server {
     listen 80;
     server_name kanban.yourdomain.com;
-    root /var/www/agentboard;
-    index index.php;
+    root /var/www/agentboard/frontend;
+    index index.html;
+
+    add_header X-Content-Type-Options  "nosniff"                          always;
+    add_header X-Frame-Options         "DENY"                             always;
+    add_header Referrer-Policy         "strict-origin-when-cross-origin"  always;
+    add_header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self'; frame-ancestors 'none'" always;
 
     location / {
-        try_files $uri $uri/ /index.php?$query_string;
+        try_files $uri $uri/ /index.html;
     }
 
-    location ~ \.php$ {
+    location = /api.php {
         fastcgi_pass unix:/run/php/php8.2-fpm.sock;
-        fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+        fastcgi_param SCRIPT_FILENAME /var/www/agentboard/backend/api.php;
         include fastcgi_params;
     }
+
+    location ~ \.(db|env)$ { deny all; }
 }
 ```
 
@@ -335,20 +342,25 @@ AgentBoard is designed for a small team where humans and AI agents share the sam
 
 ```
 agentboard/
-├── index.php               # Browser UI — lock screen, kanban, drag-and-drop
-├── api.php                 # REST JSON API + auth middleware
-├── db.php                  # SQLite init + auto-migration
-├── config.php              # .env loader, API_KEY constant
+├── frontend/               # Static web UI (served as document root)
+│   ├── index.html          # HTML shell — lock screen + board layout
+│   ├── style.css           # All styles
+│   └── app.js              # All behaviour — API calls, drag-and-drop, render
+├── backend/                # PHP API (never served directly; routed via Nginx)
+│   ├── api.php             # REST JSON API + auth middleware
+│   ├── db.php              # SQLite init + auto-migration
+│   └── config.php          # .env loader, API_KEY + DB_PATH constants
+├── mcp/                    # MCP server (Docker or Python)
+│   ├── server.py           # 10 tools + 2 resources (stdio transport)
+│   ├── CLAUDE.md           # Agent behavior guide  →  kanban://session
+│   ├── AGENT.md            # Full API reference    →  kanban://guide
+│   ├── Dockerfile          # ghcr.io/bunnyiesart/mcp-kanban
+│   ├── requirements.txt
+│   └── .dockerignore
+├── kanban.db               # SQLite database (gitignored, auto-created)
 ├── .env                    # KANBAN_API_KEY=... (gitignored)
 ├── .env.example            # Template
-├── setup-server.sh         # Quick Arch Linux setup script
-└── mcp/
-    ├── server.py           # MCP server (stdio transport, 10 tools + 2 resources)
-    ├── CLAUDE.md           # Agent behavior guide  →  kanban://session
-    ├── AGENT.md            # Full API reference    →  kanban://guide
-    ├── Dockerfile          # ghcr.io/bunnyiesart/mcp-kanban
-    ├── requirements.txt
-    └── .dockerignore
+└── setup-server.sh         # Arch Linux one-shot setup script
 ```
 
 ---

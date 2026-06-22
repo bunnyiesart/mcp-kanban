@@ -47,23 +47,30 @@ http {
     server {
         listen 80;
         server_name _;
-        root $KANBAN_DIR;
-        index index.php;
+        root $KANBAN_DIR/frontend;
+        index index.html;
         charset utf-8;
 
+        # Security headers
+        add_header X-Content-Type-Options  "nosniff"                            always;
+        add_header X-Frame-Options         "DENY"                               always;
+        add_header Referrer-Policy         "strict-origin-when-cross-origin"    always;
+        add_header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self'; frame-ancestors 'none'" always;
+
+        # Serve static frontend
         location / {
-            try_files \$uri \$uri/ /index.php?\$query_string;
+            try_files \$uri \$uri/ /index.html;
         }
 
-        location ~ \.php$ {
+        # Route API calls to the backend PHP file
+        location = /api.php {
             fastcgi_pass unix:/run/php-fpm/kanban.sock;
-            fastcgi_index index.php;
-            fastcgi_param SCRIPT_FILENAME \$document_root\$fastcgi_script_name;
+            fastcgi_param SCRIPT_FILENAME $KANBAN_DIR/backend/api.php;
             include fastcgi_params;
         }
 
-        # Block direct access to the SQLite DB
-        location ~ \.db$ { deny all; }
+        # Block direct access to sensitive files
+        location ~ \.(db|env)$ { deny all; }
     }
 }
 EOF
@@ -82,20 +89,19 @@ echo "==> Setting permissions..."
 mkdir -p /run/php-fpm /var/log/php-fpm
 chmod 755 /home/gabriel        # nginx needs to traverse into home
 chmod 755 $KANBAN_DIR
-chmod 664 $KANBAN_DIR/kanban.db
-chown $KANBAN_USER:$KANBAN_USER $KANBAN_DIR/kanban.db
+if [ -f "$KANBAN_DIR/kanban.db" ]; then
+    chmod 664 $KANBAN_DIR/kanban.db
+    chown $KANBAN_USER:$KANBAN_USER $KANBAN_DIR/kanban.db
+fi
 
 echo "==> Enabling and starting services..."
 systemctl enable --now php-fpm nginx
 
 echo ""
-echo "Done! Kanban is running at http://$(hostname -I | awk '{print $1}')"
+echo "Done! AgentBoard is running at http://$(hostname -I | awk '{print $1}')"
 echo ""
-echo "Team API key (share this with teammates):"
+echo "Team API key (share with teammates):"
 grep KANBAN_API_KEY "$KANBAN_DIR/.env" | cut -d= -f2
 echo ""
-echo "MCP config for ~/.claude/settings.json:"
+echo "MCP env var for ~/.claude/settings.json:"
 echo "  \"KANBAN_API_KEY\": \"$(grep KANBAN_API_KEY "$KANBAN_DIR/.env" | cut -d= -f2)\""
-EOF
-
-chmod +x /home/gabriel/kanban/setup-server.sh

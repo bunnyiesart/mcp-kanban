@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AgentBoard</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div id="lock">
+  <div class="lock-box">
+    <div class="lock-title">AgentBoard</div>
+    <div class="lock-sub">Enter the team API key to access the board.</div>
+    <input id="lock-key" class="lock-input" type="password" placeholder="API key…"
+           autocomplete="off" onkeydown="if(event.key==='Enter')tryUnlock()">
+    <div id="lock-err" class="lock-err">Wrong key — try again.</div>
+    <button id="lock-btn" class="lock-btn" onclick="tryUnlock()">Unlock</button>
+  </div>
+</div>
+
+<div class="app">
+  <div class="topbar">
+    <span class="topbar-title">AgentBoard</span>
+    <div id="board-meta"></div>
+  </div>
+  <div id="board"></div>
+</div>
+
+<div id="status"></div>
+<div class="popup" id="popup" style="display:none"></div>
+
+<button id="archive-toggle" onclick="toggleArchive()">Archived</button>
+
+<div id="archive-panel">
+  <div id="archive-panel-header">
+    <span>Archived</span>
+    <button id="archive-panel-close" onclick="toggleArchive()">×</button>
+  </div>
+  <div id="archive-list"></div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
