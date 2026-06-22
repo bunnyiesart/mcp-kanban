@@ -1,76 +1,94 @@
-# mcp-kanban
+```
+   ▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄
+   █                                                   █
+   █   ██████╗  ██████╗ ███████╗███╗   ██╗████████╗   █
+   █   ██╔══██╗██╔════╝ ██╔════╝████╗  ██║╚══██╔══╝   █
+   █   ███████║██║  ███╗█████╗  ██╔██╗ ██║   ██║       █
+   █   ██╔══██║██║   ██║██╔══╝  ██║╚██╗██║   ██║       █
+   █   ██║  ██║╚██████╔╝███████╗██║ ╚████║   ██║       █
+   █   ╚═╝  ╚═╝ ╚═════╝ ╚══════╝╚═╝  ╚═══╝   ╚═╝       █
+   █                                                   █
+   █   ██████╗  ██████╗  █████╗ ██████╗ ██████╗        █
+   █   ██╔══██╗██╔═══██╗██╔══██╗██╔══██╗██╔══██╗       █
+   █   ██████╔╝██║   ██║███████║██████╔╝██║  ██║       █
+   █   ██╔══██╗██║   ██║██╔══██║██╔══██╗██║  ██║       █
+   █   ██████╔╝╚██████╔╝██║  ██║██║  ██║██████╔╝       █
+   █   ╚═════╝  ╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═╝╚═════╝        █
+   █                                                   █
+   █   MCP-native kanban board for AI agents           █
+   █   and their humans.                               █
+   █                                                   █
+   ▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀
+```
 
-A self-hosted kanban board with a JSON HTTP API, built for use by humans and AI agents. Ships with an MCP (Model Context Protocol) server so Claude and other LLM toolchains can read and write cards directly.
+```
+  ┌─── To Do ─────────┐  ┌─── In Progress ───┐  ┌─── Done ──────────┐
+  │ ┌───────────────┐ │  │ ┌───────────────┐ │  │ ┌───────────────┐ │
+  │ │ Hunt C2 bcn   │ │  │ │ Patch bypass  │ │  │ │ Setup MCP     │ │
+  │ │ @gabriel      │ │  │ │ @claude       │ │  │ │ @team         │ │
+  │ └───────────────┘ │  │ └───────────────┘ │  │ └───────────────┘ │
+  │ ┌───────────────┐ │  └───────────────────┘  └───────────────────┘
+  │ │ Review alerts │ │
+  │ │ @gabriel      │ │  < drag & drop >   < AI agents write cards >
+  │ └───────────────┘ │
+  └───────────────────┘
+```
 
-## What it is
+---
 
-- **Kanban board** — columns + cards, drag-and-drop UI, dark monospace theme
+AgentBoard is a self-hosted kanban board with a JSON REST API and a full MCP (Model Context Protocol) server. Human teammates manage cards in the browser. AI agents — Claude, GPT, any MCP client — read and write cards natively via tools. Built for small blue teams that work alongside AI.
+
+---
+
+## Features
+
+- **Kanban UI** — columns + cards, drag-and-drop, live updates, lock screen
 - **REST JSON API** — full CRUD for cards and columns, archive support
-- **MCP server** — (coming in this repo) exposes the board as MCP tools so AI agents can manage tasks natively
+- **MCP server** — 10 tools + 2 context resources, Dockerised for easy deployment
+- **API key auth** — single shared key for the team; `hash_equals` timing-safe check
 - **SQLite backend** — zero external database dependencies
-- **Self-hosted** — runs on any server with PHP 8+ and a web server
+- **Self-hosted** — PHP 8 + Nginx on any Linux server
 
 ---
 
 ## Requirements
 
-| Dependency | Version |
+| Component | Version |
 |---|---|
-| PHP | 8.0+ |
-| SQLite3 extension | bundled with PHP |
-| Web server | Apache 2.4+ or Nginx |
-| (optional) Node.js | 18+ for the MCP server |
+| PHP | 8.0+ with SQLite3 |
+| Nginx (or Apache) | any recent version |
+| Python | 3.11+ (MCP server only) |
+| Docker | optional, for the MCP image |
 
 ---
 
-## Self-hosted setup
+## Board setup
 
-### 1. Clone the repo
+### 1. Clone
 
 ```bash
 git clone https://github.com/bunnyiesart/mcp-kanban.git
 cd mcp-kanban
 ```
 
-### 2. Configure the base URL
+### 2. API key
 
-Edit `config.php`:
-
-```php
-<?php
-define('BASE_URL', 'http://your-server-ip-or-domain');
-```
-
-### 3. Apache
-
-Create a vhost or drop in your `DocumentRoot`. The project uses no `.htaccess` — just point the root at the repo directory.
-
-```apache
-<VirtualHost *:80>
-    ServerName kanban.local
-    DocumentRoot /var/www/mcp-kanban
-    <Directory /var/www/mcp-kanban>
-        Options -Indexes
-        AllowOverride None
-        Require all granted
-    </Directory>
-</VirtualHost>
-```
-
-Enable and reload:
+Generate a key and write it to `.env`:
 
 ```bash
-sudo a2ensite kanban.local
-sudo systemctl reload apache2
+openssl rand -hex 32 > /tmp/k && echo "KANBAN_API_KEY=$(cat /tmp/k)" > .env && rm /tmp/k
+cat .env   # KANBAN_API_KEY=<64-char hex>
 ```
 
-### 4. Nginx
+The `.env` file is gitignored. Keep it out of version control.
+
+### 3. Nginx
 
 ```nginx
 server {
     listen 80;
-    server_name kanban.local;
-    root /var/www/mcp-kanban;
+    server_name kanban.yourdomain.com;
+    root /var/www/agentboard;
     index index.php;
 
     location / {
@@ -86,42 +104,161 @@ server {
 ```
 
 ```bash
-sudo ln -s /etc/nginx/sites-available/kanban.local /etc/nginx/sites-enabled/
+sudo chown -R www-data:www-data /var/www/agentboard
 sudo systemctl reload nginx
 ```
 
-### 5. Permissions
+### 4. First run
 
-The SQLite database file is created automatically on first request. Make sure the web server user can write to the project directory:
+Navigate to `http://your-server`. The lock screen asks for the API key. The database and default columns (To Do / In Progress / Done) are created on first request.
 
-```bash
-sudo chown -R www-data:www-data /var/www/mcp-kanban
-```
+### 5. Apache (alternative)
 
-### 6. First run
-
-Navigate to `http://your-server` in a browser. The database and default columns (To Do / In Progress / Done) are created automatically.
-
-To seed demo data:
-
-```bash
-php seed.php
+```apache
+<VirtualHost *:80>
+    ServerName kanban.yourdomain.com
+    DocumentRoot /var/www/agentboard
+    <Directory /var/www/agentboard>
+        Options -Indexes
+        AllowOverride None
+        Require all granted
+    </Directory>
+</VirtualHost>
 ```
 
 ---
 
-## API reference
+## MCP server
+
+The MCP server in `mcp/` wraps the REST API as tools for Claude Code, Claude Desktop, and any other MCP client. It also exposes two resources — a behavior guide and a full API reference — that AI agents can read at session start.
+
+### Docker (recommended)
+
+```bash
+docker pull ghcr.io/bunnyiesart/mcp-kanban:latest
+```
+
+Run as a stdio MCP server:
+
+```bash
+docker run -i --rm \
+  -e KANBAN_URL=http://your-server \
+  -e KANBAN_API_KEY=your-api-key \
+  ghcr.io/bunnyiesart/mcp-kanban:latest
+```
+
+### Claude Code — `~/.claude/settings.json`
+
+```json
+{
+  "mcpServers": {
+    "agentboard": {
+      "command": "docker",
+      "args": [
+        "run", "-i", "--rm",
+        "-e", "KANBAN_URL=http://your-server",
+        "-e", "KANBAN_API_KEY=your-api-key",
+        "ghcr.io/bunnyiesart/mcp-kanban:latest"
+      ]
+    }
+  }
+}
+```
+
+Without Docker (Python):
+
+```json
+{
+  "mcpServers": {
+    "agentboard": {
+      "command": "python",
+      "args": ["/path/to/agentboard/mcp/server.py"],
+      "env": {
+        "KANBAN_URL": "http://your-server",
+        "KANBAN_API_KEY": "your-api-key"
+      }
+    }
+  }
+}
+```
+
+### Claude Desktop — `claude_desktop_config.json`
+
+macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`  
+Windows: `%APPDATA%\Claude\claude_desktop_config.json`
+
+```json
+{
+  "mcpServers": {
+    "agentboard": {
+      "command": "docker",
+      "args": [
+        "run", "-i", "--rm",
+        "-e", "KANBAN_URL=http://your-server",
+        "-e", "KANBAN_API_KEY=your-api-key",
+        "ghcr.io/bunnyiesart/mcp-kanban:latest"
+      ]
+    }
+  }
+}
+```
+
+### Install without Docker
+
+```bash
+pip install -r mcp/requirements.txt
+KANBAN_URL=http://your-server KANBAN_API_KEY=your-key python mcp/server.py
+```
+
+### Environment variables
+
+| Variable | Default | Description |
+|---|---|---|
+| `KANBAN_URL` | `http://localhost` | Base URL of the board |
+| `KANBAN_API_KEY` | *(required)* | Shared API key |
+| `KANBAN_AGENT` | `claude` | Default agent name if none given |
+
+### MCP tools
+
+| Tool | What it does |
+|---|---|
+| `board_read` | Return all columns and active cards |
+| `card_create` | Create a card (`title`, `column_id`, `agent`, `notes?`, `url?`) |
+| `card_move` | Move a card to a different column |
+| `card_update` | Update title / notes / url / agent |
+| `card_archive` | Archive a card (hidden, reversible) |
+| `card_unarchive` | Restore an archived card |
+| `card_delete` | Permanently delete a card |
+| `cards_archived` | List all archived cards |
+| `column_add` | Add a new column |
+| `column_delete` | Delete a column and all its cards |
+
+### MCP resources
+
+| URI | Description |
+|---|---|
+| `kanban://session` | Agent behavior guide — ask for name, workflow, card etiquette |
+| `kanban://guide` | Full API reference with field definitions and curl examples |
+
+### Test with MCP inspector
+
+```bash
+mcp dev mcp/server.py
+```
+
+---
+
+## REST API
 
 All requests go to `api.php?action=<action>`.  
-GET requests use query params. POST requests send a JSON body.
+Every request must include the `X-Api-Key` header.
 
 ### Read the board
 
 ```
 GET /api.php?action=board
+X-Api-Key: your-api-key
 ```
-
-Returns all columns and their active (non-archived) cards.
 
 ### Cards
 
@@ -142,9 +279,9 @@ Card fields:
 | `id` | int | Auto-assigned |
 | `title` | string | Task description |
 | `column_id` | int | Which column the card lives in |
-| `agent` | string | Who created/owns it |
-| `url` | string? | Link to a PR, issue, or file |
-| `notes` | string? | Free-text observations |
+| `agent` | string | Who owns it (human name or `claude`) |
+| `url` | string? | Link to a PR, issue, alert, or log |
+| `notes` | string? | Free-text trail of progress |
 | `archived` | bool | Hidden from the main board |
 
 ### Columns
@@ -158,179 +295,70 @@ POST /api.php?action=delete_col    { "id": 3 }
 
 ```bash
 BASE="http://your-server/api.php"
+KEY="your-api-key"
 
 # Create
 curl -s -X POST "$BASE?action=create_card" \
-  -H "Content-Type: application/json" \
-  -d '{"title":"Fix login bug","column_id":1,"agent":"claude"}'
+  -H "Content-Type: application/json" -H "X-Api-Key: $KEY" \
+  -d '{"title":"Hunt C2 beacon","column_id":1,"agent":"gabriel"}'
 
 # Move to In Progress
 curl -s -X POST "$BASE?action=move_card" \
-  -H "Content-Type: application/json" \
+  -H "Content-Type: application/json" -H "X-Api-Key: $KEY" \
   -d '{"id":1,"column_id":2}'
 
 # Add a note
 curl -s -X POST "$BASE?action=update_card" \
-  -H "Content-Type: application/json" \
-  -d '{"id":1,"notes":"Root cause found: missing session check."}'
+  -H "Content-Type: application/json" -H "X-Api-Key: $KEY" \
+  -d '{"id":1,"notes":"Found beacon on port 4444 — isolating host."}'
 
-# Move to Done
+# Done
 curl -s -X POST "$BASE?action=move_card" \
-  -H "Content-Type: application/json" \
+  -H "Content-Type: application/json" -H "X-Api-Key: $KEY" \
   -d '{"id":1,"column_id":3}'
 ```
 
 ---
 
-## MCP server
+## Team usage
 
-A Python MCP server in `mcp/` that wraps the REST API as tools for Claude Code, Claude Desktop, and any other MCP-compatible client.
+AgentBoard is designed for a small team where humans and AI agents share the same board:
 
-### Docker (recommended)
-
-Pre-built image is published to GitHub Container Registry on every push to `main`:
-
-```bash
-docker pull ghcr.io/bunnyiesart/mcp-kanban:latest
-```
-
-Run it as a stdio MCP server (pass `-i` so stdin/stdout stay open):
-
-```bash
-docker run -i \
-  -e KANBAN_URL=http://your-server \
-  -e KANBAN_AGENT=claude \
-  ghcr.io/bunnyiesart/mcp-kanban:latest
-```
-
-In `~/.claude/settings.json`:
-
-```json
-{
-  "mcpServers": {
-    "kanban": {
-      "command": "docker",
-      "args": ["run", "-i", "--rm",
-               "-e", "KANBAN_URL=http://your-server",
-               "-e", "KANBAN_AGENT=claude",
-               "ghcr.io/bunnyiesart/mcp-kanban:latest"]
-    }
-  }
-}
-```
-
-### Install (without Docker)
-
-```bash
-pip install -r mcp/requirements.txt
-```
-
-Or with [uv](https://github.com/astral-sh/uv) (no virtualenv needed):
-
-```bash
-uv pip install -r mcp/requirements.txt
-```
-
-### Tools
-
-| Tool | What it does |
-|---|---|
-| `board_read` | Return all columns and active cards |
-| `card_create` | Create a card (title, column_id, notes?, url?) |
-| `card_move` | Move a card to a different column |
-| `card_update` | Update title / notes / url / agent on a card |
-| `card_archive` | Archive a card (hidden, reversible) |
-| `card_unarchive` | Restore an archived card |
-| `card_delete` | Permanently delete a card |
-| `cards_archived` | List all archived cards |
-| `column_add` | Add a new column |
-| `column_delete` | Delete a column and all its cards |
-
-### Claude Code
-
-Add to `~/.claude/settings.json`:
-
-```json
-{
-  "mcpServers": {
-    "kanban": {
-      "command": "python",
-      "args": ["/path/to/mcp-kanban/mcp/server.py"],
-      "env": {
-        "KANBAN_URL": "http://your-server",
-        "KANBAN_AGENT": "claude"
-      }
-    }
-  }
-}
-```
-
-Or with `uv run`:
-
-```json
-{
-  "mcpServers": {
-    "kanban": {
-      "command": "uv",
-      "args": ["run", "--with", "mcp[cli]", "--with", "httpx", "/path/to/mcp-kanban/mcp/server.py"],
-      "env": {
-        "KANBAN_URL": "http://your-server",
-        "KANBAN_AGENT": "claude"
-      }
-    }
-  }
-}
-```
-
-### Claude Desktop
-
-Add to `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) or `%APPDATA%\Claude\claude_desktop_config.json` (Windows):
-
-```json
-{
-  "mcpServers": {
-    "kanban": {
-      "command": "python",
-      "args": ["/path/to/mcp-kanban/mcp/server.py"],
-      "env": {
-        "KANBAN_URL": "http://your-server",
-        "KANBAN_AGENT": "claude"
-      }
-    }
-  }
-}
-```
-
-### Environment variables
-
-| Variable | Default | Description |
-|---|---|---|
-| `KANBAN_URL` | `http://localhost` | Base URL of the PHP board server |
-| `KANBAN_AGENT` | `claude` | Agent name written to cards when none is specified |
-
-### Test with MCP inspector
-
-```bash
-mcp dev mcp/server.py
-```
+- **Humans** unlock the board with the shared API key and drag cards between columns in the browser.
+- **AI agents** (Claude, etc.) read `kanban://session` at session start, ask for the operator's name, and tag every card they create with it so work is always attributable.
+- All cards have an `agent` field — the name of whoever (human or AI) owns the work.
+- Prefer `card_archive` over `card_delete` to preserve history.
 
 ---
 
 ## File structure
 
 ```
-mcp-kanban/
-├── index.php       # Frontend UI (single-file SPA)
-├── api.php         # REST JSON API
-├── db.php          # SQLite connection + auto-migration
-├── config.php      # Base URL config
-├── schema.sql      # DB schema reference
-├── seed.php        # Demo data seeder
-├── AGENT.md        # API guide for AI agents
+agentboard/
+├── index.php               # Browser UI — lock screen, kanban, drag-and-drop
+├── api.php                 # REST JSON API + auth middleware
+├── db.php                  # SQLite init + auto-migration
+├── config.php              # .env loader, API_KEY constant
+├── .env                    # KANBAN_API_KEY=... (gitignored)
+├── .env.example            # Template
+├── setup-server.sh         # Quick Arch Linux setup script
 └── mcp/
-    ├── server.py   # MCP server (stdio transport)
-    └── requirements.txt
+    ├── server.py           # MCP server (stdio transport, 10 tools + 2 resources)
+    ├── CLAUDE.md           # Agent behavior guide  →  kanban://session
+    ├── AGENT.md            # Full API reference    →  kanban://guide
+    ├── Dockerfile          # ghcr.io/bunnyiesart/mcp-kanban
+    ├── requirements.txt
+    └── .dockerignore
 ```
+
+---
+
+## Security
+
+- Single shared API key loaded from `.env` (never committed).
+- Every request validated with `hash_equals()` — timing-safe comparison.
+- Lock screen uses `sessionStorage` — key clears when the tab closes.
+- Security headers on all responses: `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, `Content-Security-Policy`.
 
 ---
 
