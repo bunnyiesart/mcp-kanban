@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 FROM php:8.3-fpm-alpine
 
-RUN apk add --no-cache nginx supervisor curl \
+RUN apk add --no-cache nginx supervisor curl sqlite-dev \
  && docker-php-ext-install pdo_sqlite
 
 COPY frontend/ /app/frontend/
