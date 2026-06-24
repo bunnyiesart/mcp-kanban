@@ -146,7 +146,8 @@ If you used Docker Compose, the MCP server is already running. Connect to it wit
         "run", "-i", "--rm",
         "-e", "KANBAN_URL=http://your-server",
         "-e", "KANBAN_API_KEY=your-api-key",
-        "ghcr.io/bunnyiesart/agentboard:latest mcp"
+        "ghcr.io/bunnyiesart/agentboard:latest",
+        "mcp"
       ]
     }
   }
@@ -164,7 +165,8 @@ If you used Docker Compose, the MCP server is already running. Connect to it wit
         "run", "-i", "--rm",
         "-e", "KANBAN_URL=http://your-server",
         "-e", "KANBAN_API_KEY=your-api-key",
-        "ghcr.io/bunnyiesart/agentboard:latest mcp"
+        "ghcr.io/bunnyiesart/agentboard:latest",
+        "mcp"
       ]
     }
   }
@@ -185,7 +187,8 @@ Windows: `%APPDATA%\Claude\claude_desktop_config.json`
         "run", "-i", "--rm",
         "-e", "KANBAN_URL=http://your-server",
         "-e", "KANBAN_API_KEY=your-api-key",
-        "ghcr.io/bunnyiesart/agentboard:latest mcp"
+        "ghcr.io/bunnyiesart/agentboard:latest",
+        "mcp"
       ]
     }
   }

@@ -5,8 +5,12 @@ You have full read/write access via a JSON HTTP API.
 
 ## Base URL
 
+The board URL is set by the `KANBAN_URL` environment variable (e.g. `http://your-server`).
+All requests go to `$KANBAN_URL/api.php?action=<action>`.
+
+Every request must include the header:
 ```
-http://192.168.15.8/api.php
+X-Api-Key: <your-api-key>
 ```
 
 ---
@@ -39,6 +43,7 @@ GET requests use query params. POST requests send JSON body.
 
 ```
 GET api.php?action=board
+X-Api-Key: <key>
 ```
 
 Returns all columns and their active (non-archived) cards.
@@ -63,6 +68,7 @@ Returns all columns and their active (non-archived) cards.
 
 ```
 POST api.php?action=create_card
+X-Api-Key: <key>
 ```
 
 ```json
@@ -83,6 +89,7 @@ POST api.php?action=create_card
 
 ```
 POST api.php?action=update_card
+X-Api-Key: <key>
 ```
 
 ```json
@@ -97,6 +104,7 @@ Only include fields you want to change. Useful for leaving observations on someo
 
 ```
 POST api.php?action=move_card
+X-Api-Key: <key>
 ```
 
 ```json
@@ -111,6 +119,7 @@ Use this to advance work through the workflow (e.g. To Do → In Progress → Do
 
 ```
 POST api.php?action=archive_card
+X-Api-Key: <key>
 ```
 
 ```json
@@ -125,6 +134,7 @@ Removes from the board view. Humans can see archived cards in the sidebar.
 
 ```
 GET api.php?action=archived_cards
+X-Api-Key: <key>
 ```
 
 ---
@@ -133,6 +143,7 @@ GET api.php?action=archived_cards
 
 ```
 POST api.php?action=unarchive_card
+X-Api-Key: <key>
 ```
 
 ```json
@@ -145,6 +156,7 @@ POST api.php?action=unarchive_card
 
 ```
 POST api.php?action=delete_card
+X-Api-Key: <key>
 ```
 
 ```json
@@ -186,25 +198,30 @@ POST api.php?action=delete_col    { "id": 3 }
 ## Example: full task lifecycle (curl)
 
 ```bash
-BASE="http://192.168.15.8/api.php"
+BASE="$KANBAN_URL/api.php"
+KEY="your-api-key"
 
 # 1. Create
 curl -s -X POST "$BASE?action=create_card" \
   -H "Content-Type: application/json" \
+  -H "X-Api-Key: $KEY" \
   -d '{"title":"Fix session expiry bug","column_id":1,"agent":"claude","url":"https://github.com/user/repo/issues/11"}'
 
 # 2. Move to In Progress
 curl -s -X POST "$BASE?action=move_card" \
   -H "Content-Type: application/json" \
+  -H "X-Api-Key: $KEY" \
   -d '{"id":5,"column_id":2}'
 
 # 3. Add a note
 curl -s -X POST "$BASE?action=update_card" \
   -H "Content-Type: application/json" \
+  -H "X-Api-Key: $KEY" \
   -d '{"id":5,"notes":"Root cause: SameSite cookie flag missing on /refresh. Fix: add SameSite=Lax."}'
 
 # 4. Done
 curl -s -X POST "$BASE?action=move_card" \
   -H "Content-Type: application/json" \
+  -H "X-Api-Key: $KEY" \
   -d '{"id":5,"column_id":3}'
 ```
