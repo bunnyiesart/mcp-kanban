@@ -47,91 +47,57 @@ AgentBoard is a self-hosted kanban board with a JSON REST API and a full MCP (Mo
 - **MCP server** — 10 tools + 2 context resources, Dockerised for easy deployment
 - **API key auth** — single shared key for the team; `hash_equals` timing-safe check
 - **SQLite backend** — zero external database dependencies
-- **Self-hosted** — PHP 8 + Nginx on any Linux server
+- **Self-hosted** — Docker Compose (any Linux/Mac) or bare-metal (Arch, Debian/Ubuntu, Fedora)
 
 ---
 
-## Requirements
+## Deploy with Docker Compose
 
-| Component | Version |
-|---|---|
-| PHP | 8.0+ with SQLite3 |
-| Nginx (or Apache) | any recent version |
-| Python | 3.11+ (MCP server only) |
-| Docker | optional, for the MCP image |
-
----
-
-## Board setup
-
-### 1. Clone
+The fastest way to get both the board and the MCP server running:
 
 ```bash
 git clone https://github.com/bunnyiesart/mcp-kanban.git
 cd mcp-kanban
+
+cp .env.example .env
+echo "KANBAN_API_KEY=$(openssl rand -hex 32)" >> .env
+
+docker compose up -d
 ```
 
-### 2. API key
+The board is now at `http://localhost`. The MCP server starts automatically once the board is healthy.
 
-Generate a key and write it to `.env`:
+### Environment variables (`.env`)
+
+| Variable | Default | Description |
+|---|---|---|
+| `KANBAN_API_KEY` | *(required)* | Shared key for the team and all agents |
+| `PORT` | `80` | Host port the board listens on |
+| `KANBAN_AGENT` | `claude` | Default agent name for the MCP server |
+
+### Images
+
+| Image | What it is |
+|---|---|
+| `ghcr.io/bunnyiesart/agentboard:latest` | Board — nginx + PHP + SQLite |
+| `ghcr.io/bunnyiesart/mcp-kanban:latest` | MCP server — Python, stdio transport |
+
+---
+
+## Bare-metal setup
+
+For direct installation without Docker. Supports **Arch**, **Debian/Ubuntu**, and **Fedora/RHEL**:
 
 ```bash
-openssl rand -hex 32 > /tmp/k && echo "KANBAN_API_KEY=$(cat /tmp/k)" > .env && rm /tmp/k
-cat .env   # KANBAN_API_KEY=<64-char hex>
+git clone https://github.com/bunnyiesart/mcp-kanban.git
+cd mcp-kanban
+sudo bash setup-server.sh
 ```
 
-The `.env` file is gitignored. Keep it out of version control.
-
-### 3. Nginx
-
-```nginx
-# Replace /path/to/agentboard with your actual clone path
-server {
-    listen 80;
-    server_name kanban.yourdomain.com;
-    root /path/to/agentboard/frontend;
-    index index.html;
-
-    add_header X-Content-Type-Options  "nosniff"                          always;
-    add_header X-Frame-Options         "DENY"                             always;
-    add_header Referrer-Policy         "strict-origin-when-cross-origin"  always;
-    add_header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self'; frame-ancestors 'none'" always;
-
-    location / {
-        try_files $uri $uri/ /index.html;
-    }
-
-    location = /api.php {
-        fastcgi_pass unix:/run/php/php8.2-fpm.sock;
-        fastcgi_param SCRIPT_FILENAME /path/to/agentboard/backend/api.php;
-        include fastcgi_params;
-    }
-
-    location ~ \.(db|env)$ { deny all; }
-}
-```
+The script detects your distro, installs nginx and php-fpm, writes the configs, generates an API key, and starts the services. Pass `KANBAN_API_KEY=<key>` to use your own key instead of generating one:
 
 ```bash
-sudo chown -R www-data:www-data /var/www/agentboard
-sudo systemctl reload nginx
-```
-
-### 4. First run
-
-Navigate to `http://your-server`. The lock screen asks for the API key. The database and default columns (To Do / In Progress / Done) are created on first request.
-
-### 5. Apache (alternative)
-
-```apache
-<VirtualHost *:80>
-    ServerName kanban.yourdomain.com
-    DocumentRoot /var/www/agentboard
-    <Directory /var/www/agentboard>
-        Options -Indexes
-        AllowOverride None
-        Require all granted
-    </Directory>
-</VirtualHost>
+sudo KANBAN_API_KEY=your-key bash setup-server.sh
 ```
 
 ---
@@ -141,55 +107,34 @@ Navigate to `http://your-server`. The lock screen asks for the API key. The data
 ### Show the current key
 
 ```bash
-grep KANBAN_API_KEY /path/to/agentboard/.env | cut -d= -f2
+grep KANBAN_API_KEY .env | cut -d= -f2
 ```
 
-### Rotate the key (generates a new one)
+### Rotate the key
 
 ```bash
+# Bare-metal
 sudo bash rotate-key.sh
+
+# Docker Compose — edit .env, then restart
+docker compose restart
 ```
 
-The script updates `.env`, reloads php-fpm, and prints the new key. All active browser sessions will hit the lock screen on their next API call — they just need to re-enter the new key.
-
-### Rotate to a specific key
-
-Useful when pulling a key from a secrets manager or a team vault:
+Pass `KANBAN_API_KEY=<key>` to rotate to a specific value:
 
 ```bash
 sudo KANBAN_API_KEY=your-key bash rotate-key.sh
 ```
 
-### Use your own key during initial setup
-
-```bash
-sudo KANBAN_API_KEY=your-key bash setup-server.sh
-```
-
-If `KANBAN_API_KEY` is set in the environment, `setup-server.sh` uses it instead of generating one. If `.env` already exists, setup always skips key generation.
+All active browser sessions hit the lock screen on their next API call and just need to re-enter the new key.
 
 ---
 
 ## MCP server
 
-The MCP server in `mcp/` wraps the REST API as tools for Claude Code, Claude Desktop, and any other MCP client. It also exposes two resources — a behavior guide and a full API reference — that AI agents can read at session start.
+The MCP server in `mcp/` wraps the REST API as tools for Claude Code, Claude Desktop, and any MCP client. It exposes two resources — a behavior guide and a full API reference — that agents read at session start.
 
-### Docker (recommended)
-
-```bash
-docker pull ghcr.io/bunnyiesart/mcp-kanban:latest
-```
-
-Run as a stdio MCP server:
-
-```bash
-docker run -i --rm \
-  -e KANBAN_URL=http://your-server \
-  -e KANBAN_API_KEY=your-api-key \
-  ghcr.io/bunnyiesart/mcp-kanban:latest
-```
-
-### Claude Code — `~/.claude/settings.json`
+If you used Docker Compose, the MCP server is already running. Connect to it with:
 
 ```json
 {
@@ -207,18 +152,19 @@ docker run -i --rm \
 }
 ```
 
-Without Docker (Python):
+### Claude Code — `~/.claude/settings.json`
 
 ```json
 {
   "mcpServers": {
     "agentboard": {
-      "command": "python",
-      "args": ["/path/to/agentboard/mcp/server.py"],
-      "env": {
-        "KANBAN_URL": "http://your-server",
-        "KANBAN_API_KEY": "your-api-key"
-      }
+      "command": "docker",
+      "args": [
+        "run", "-i", "--rm",
+        "-e", "KANBAN_URL=http://your-server",
+        "-e", "KANBAN_API_KEY=your-api-key",
+        "ghcr.io/bunnyiesart/mcp-kanban:latest"
+      ]
     }
   }
 }
@@ -245,20 +191,29 @@ Windows: `%APPDATA%\Claude\claude_desktop_config.json`
 }
 ```
 
-### Install without Docker
+### Without Docker (Python)
 
 ```bash
 pip install -r mcp/requirements.txt
 KANBAN_URL=http://your-server KANBAN_API_KEY=your-key python mcp/server.py
 ```
 
-### Environment variables
+Or in `settings.json`:
 
-| Variable | Default | Description |
-|---|---|---|
-| `KANBAN_URL` | `http://localhost` | Base URL of the board |
-| `KANBAN_API_KEY` | *(required)* | Shared API key |
-| `KANBAN_AGENT` | `claude` | Default agent name if none given |
+```json
+{
+  "mcpServers": {
+    "agentboard": {
+      "command": "python",
+      "args": ["/path/to/agentboard/mcp/server.py"],
+      "env": {
+        "KANBAN_URL": "http://your-server",
+        "KANBAN_API_KEY": "your-api-key"
+      }
+    }
+  }
+}
+```
 
 ### MCP tools
 
@@ -378,24 +333,28 @@ AgentBoard is designed for a small team where humans and AI agents share the sam
 ```
 agentboard/
 ├── frontend/               # Static web UI (served as document root)
-│   ├── index.html          # HTML shell — lock screen + board layout
-│   ├── style.css           # All styles
-│   └── app.js              # All behaviour — API calls, drag-and-drop, render
-├── backend/                # PHP API (never served directly; routed via Nginx)
+│   ├── index.html
+│   ├── style.css
+│   └── app.js
+├── backend/                # PHP API (never served directly; routed via nginx)
 │   ├── api.php             # REST JSON API + auth middleware
-│   ├── db.php              # SQLite init + auto-migration
-│   └── config.php          # .env loader, API_KEY + DB_PATH constants
-├── mcp/                    # MCP server (Docker or Python)
+│   ├── db.php              # SQLite init + schema
+│   └── config.php          # .env loader, DB_PATH + API_KEY constants
+├── mcp/                    # MCP server
 │   ├── server.py           # 10 tools + 2 resources (stdio transport)
 │   ├── CLAUDE.md           # Agent behavior guide  →  kanban://session
 │   ├── AGENT.md            # Full API reference    →  kanban://guide
 │   ├── Dockerfile          # ghcr.io/bunnyiesart/mcp-kanban
-│   ├── requirements.txt
-│   └── .dockerignore
-├── kanban.db               # SQLite database (gitignored, auto-created)
-├── .env                    # KANBAN_API_KEY=... (gitignored)
-├── .env.example            # Template
-└── setup-server.sh         # Arch Linux one-shot setup script
+│   └── requirements.txt
+├── docker/                 # Config files for the app container
+│   ├── nginx.conf
+│   ├── supervisord.conf
+│   └── php-fpm-pool.conf
+├── Dockerfile              # App image — ghcr.io/bunnyiesart/agentboard
+├── docker-compose.yml      # Orchestrates app + mcp together
+├── .env.example            # Copy to .env and fill in KANBAN_API_KEY
+├── setup-server.sh         # Bare-metal setup (Arch / Debian-Ubuntu / Fedora)
+└── rotate-key.sh           # Rotates API key in .env and reloads php-fpm
 ```
 
 ---
@@ -406,6 +365,7 @@ agentboard/
 - Every request validated with `hash_equals()` — timing-safe comparison.
 - Lock screen uses `sessionStorage` — key clears when the tab closes.
 - Security headers on all responses: `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, `Content-Security-Policy`.
+- MCP server container runs as a non-root user.
 
 ---
 

@@ -1,5 +1,5 @@
 <?php
-define('DB_PATH', __DIR__ . '/../kanban.db');
+define('DB_PATH', getenv('KANBAN_DB_PATH') ?: __DIR__ . '/../kanban.db');
 
 // Load .env if present (key=value, # comments)
 $_ef = __DIR__ . '/../.env';

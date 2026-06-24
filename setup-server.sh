@@ -1,9 +1,7 @@
 #!/bin/bash
 set -e
 
-# Detect install path from where this script lives
 KANBAN_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# Detect the owner of that directory as the runtime user
 KANBAN_USER="$(stat -c '%U' "$KANBAN_DIR")"
 
 echo "==> AgentBoard setup"
@@ -11,37 +9,110 @@ echo "    Directory : $KANBAN_DIR"
 echo "    User      : $KANBAN_USER"
 echo ""
 
-echo "==> Installing nginx and php-fpm..."
-pacman -S --noconfirm nginx php-fpm
+# ── Detect distro ──────────────────────────────────────────────────────────────
+if   command -v pacman  &>/dev/null; then DISTRO=arch
+elif command -v apt-get &>/dev/null; then DISTRO=debian
+elif command -v dnf     &>/dev/null; then DISTRO=fedora
+else
+    echo "ERROR: No supported package manager found (pacman / apt-get / dnf)." >&2
+    echo "       Use Docker instead:" >&2
+    echo "         cp .env.example .env" >&2
+    echo "         echo \"KANBAN_API_KEY=\$(openssl rand -hex 32)\" >> .env" >&2
+    echo "         docker compose up -d" >&2
+    exit 1
+fi
 
+echo "==> Detected distro: $DISTRO"
+echo ""
+
+# ── Install packages ──────────────────────────────────────────────────────────
+echo "==> Installing nginx and php-fpm..."
+case "$DISTRO" in
+    arch)
+        pacman -S --noconfirm nginx php-fpm
+        ;;
+    debian)
+        export DEBIAN_FRONTEND=noninteractive
+        apt-get update -qq
+        apt-get install -y nginx php-fpm
+        ;;
+    fedora)
+        dnf install -y nginx php-fpm php-pdo
+        ;;
+esac
+
+# ── Per-distro variables ──────────────────────────────────────────────────────
+case "$DISTRO" in
+    arch)
+        FPM_SERVICE=php-fpm
+        FPM_POOL_DIR=/etc/php/php-fpm.d
+        FPM_SOCK=/run/php-fpm/kanban.sock
+        FPM_SOCK_DIR=/run/php-fpm
+        FPM_LOG_DIR=/var/log/php-fpm
+        NGINX_USER=http
+        ;;
+    debian)
+        PHP_VER=$(php -r 'echo PHP_MAJOR_VERSION.".".PHP_MINOR_VERSION;')
+        FPM_SERVICE="php${PHP_VER}-fpm"
+        FPM_POOL_DIR="/etc/php/${PHP_VER}/fpm/pool.d"
+        FPM_SOCK="/run/php/php${PHP_VER}-fpm-kanban.sock"
+        FPM_SOCK_DIR=/run/php
+        FPM_LOG_DIR=/var/log/php-fpm
+        NGINX_USER=www-data
+        ;;
+    fedora)
+        FPM_SERVICE=php-fpm
+        FPM_POOL_DIR=/etc/php-fpm.d
+        FPM_SOCK=/run/php-fpm/kanban.sock
+        FPM_SOCK_DIR=/run/php-fpm
+        FPM_LOG_DIR=/var/log/php-fpm
+        NGINX_USER=nginx
+        ;;
+esac
+
+# ── PHP-FPM pool config ───────────────────────────────────────────────────────
 echo "==> Writing php-fpm pool config..."
-mkdir -p /etc/php/php-fpm.d
-cat > /etc/php/php-fpm.conf <<'EOF'
+
+# On Arch the package ships php-fpm.conf; write it if missing
+if [ "$DISTRO" = "arch" ]; then
+    if [ ! -f /etc/php/php-fpm.conf ]; then
+        cat > /etc/php/php-fpm.conf <<'CONF'
 [global]
 pid = /run/php-fpm/php-fpm.pid
 error_log = /var/log/php-fpm/error.log
 include = /etc/php/php-fpm.d/*.conf
-EOF
+CONF
+    fi
+fi
 
-cat > /etc/php/php-fpm.d/kanban.conf <<EOF
+mkdir -p "$FPM_POOL_DIR"
+
+# Disable the distro's default pool so it doesn't compete with ours
+for f in "$FPM_POOL_DIR/www.conf" "$FPM_POOL_DIR/www.conf.rpmsave"; do
+    [ -f "$f" ] && mv "$f" "${f}.disabled" && echo "    (disabled default pool: $f)"
+done
+
+cat > "$FPM_POOL_DIR/kanban.conf" <<CONF
 [kanban]
 user = $KANBAN_USER
 group = $KANBAN_USER
-listen = /run/php-fpm/kanban.sock
-listen.owner = http
-listen.group = http
+listen = $FPM_SOCK
+listen.owner = $NGINX_USER
+listen.group = $NGINX_USER
 listen.mode = 0660
 pm = dynamic
 pm.max_children = 10
 pm.start_servers = 2
 pm.min_spare_servers = 1
 pm.max_spare_servers = 5
-php_admin_value[error_log] = /var/log/php-fpm/kanban-error.log
+php_admin_value[error_log] = $FPM_LOG_DIR/kanban-error.log
 php_admin_flag[log_errors] = on
-EOF
+CONF
 
+# ── nginx config ──────────────────────────────────────────────────────────────
 echo "==> Writing nginx config..."
-cat > /etc/nginx/nginx.conf <<EOF
+cat > /etc/nginx/nginx.conf <<CONF
+user $NGINX_USER;
 worker_processes auto;
 events { worker_connections 1024; }
 
@@ -68,7 +139,7 @@ http {
         }
 
         location = /api.php {
-            fastcgi_pass unix:/run/php-fpm/kanban.sock;
+            fastcgi_pass unix:$FPM_SOCK;
             fastcgi_param SCRIPT_FILENAME $KANBAN_DIR/backend/api.php;
             include fastcgi_params;
         }
@@ -76,16 +147,12 @@ http {
         location ~ \.(db|env)$ { deny all; }
     }
 }
-EOF
+CONF
 
+# ── API key ───────────────────────────────────────────────────────────────────
 echo "==> Generating API key..."
 if [ ! -f "$KANBAN_DIR/.env" ]; then
-    # Use a pre-set key if provided, otherwise generate one
-    if [ -n "$KANBAN_API_KEY" ]; then
-        echo "    Using provided KANBAN_API_KEY"
-    else
-        KANBAN_API_KEY=$(openssl rand -hex 32)
-    fi
+    KANBAN_API_KEY="${KANBAN_API_KEY:-$(openssl rand -hex 32)}"
     echo "KANBAN_API_KEY=$KANBAN_API_KEY" > "$KANBAN_DIR/.env"
     chown "$KANBAN_USER:$KANBAN_USER" "$KANBAN_DIR/.env"
     chmod 600 "$KANBAN_DIR/.env"
@@ -93,10 +160,11 @@ else
     echo "    .env already exists, skipping key generation"
 fi
 
+# ── Permissions ───────────────────────────────────────────────────────────────
 echo "==> Setting permissions..."
-mkdir -p /run/php-fpm /var/log/php-fpm
+mkdir -p "$FPM_SOCK_DIR" "$FPM_LOG_DIR"
 
-# nginx/http needs execute permission on every directory in the path
+# nginx workers need execute on every directory in the path
 chmod o+x "$(dirname "$KANBAN_DIR")"
 chmod 755 "$KANBAN_DIR"
 
@@ -105,8 +173,9 @@ if [ -f "$KANBAN_DIR/kanban.db" ]; then
     chown "$KANBAN_USER:$KANBAN_USER" "$KANBAN_DIR/kanban.db"
 fi
 
+# ── Start services ────────────────────────────────────────────────────────────
 echo "==> Enabling and starting services..."
-systemctl enable --now php-fpm nginx
+systemctl enable --now "$FPM_SERVICE" nginx
 
 echo ""
 echo "Done! AgentBoard is running at http://$(hostname -I | awk '{print $1}')"

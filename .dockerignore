@@ -1,0 +1,9 @@
+kanban.db
+*.db-shm
+*.db-wal
+.env
+mcp/
+.git
+.gitignore
+*.md
+*.sh

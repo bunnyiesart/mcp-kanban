@@ -1,0 +1,24 @@
+services:
+  app:
+    build: .
+    ports:
+      - "${PORT:-80}:80"
+    environment:
+      KANBAN_API_KEY: ${KANBAN_API_KEY}
+    volumes:
+      - kanban-data:/data
+    restart: unless-stopped
+
+  mcp:
+    build: ./mcp
+    environment:
+      KANBAN_URL: http://app
+      KANBAN_API_KEY: ${KANBAN_API_KEY}
+      KANBAN_AGENT: ${KANBAN_AGENT:-claude}
+    depends_on:
+      app:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  kanban-data:
