@@ -2,8 +2,11 @@ kanban.db
 *.db-shm
 *.db-wal
 .env
-mcp/
 .git
 .gitignore
 *.md
 *.sh
+mcp/__pycache__
+mcp/*.pyc
+mcp/Dockerfile
+mcp/.dockerignore

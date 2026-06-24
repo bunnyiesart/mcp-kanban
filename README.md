@@ -75,12 +75,13 @@ The board is now at `http://localhost`. The MCP server starts automatically once
 | `PORT` | `80` | Host port the board listens on |
 | `KANBAN_AGENT` | `claude` | Default agent name for the MCP server |
 
-### Images
+### Image
 
-| Image | What it is |
-|---|---|
-| `ghcr.io/bunnyiesart/agentboard:latest` | Board — nginx + PHP + SQLite |
-| `ghcr.io/bunnyiesart/mcp-kanban:latest` | MCP server — Python, stdio transport |
+```
+ghcr.io/bunnyiesart/agentboard:latest
+```
+
+One image runs both modes — pass `board` (default) or `mcp` as the command.
 
 ---
 
@@ -145,7 +146,7 @@ If you used Docker Compose, the MCP server is already running. Connect to it wit
         "run", "-i", "--rm",
         "-e", "KANBAN_URL=http://your-server",
         "-e", "KANBAN_API_KEY=your-api-key",
-        "ghcr.io/bunnyiesart/mcp-kanban:latest"
+        "ghcr.io/bunnyiesart/agentboard:latest mcp"
       ]
     }
   }
@@ -163,7 +164,7 @@ If you used Docker Compose, the MCP server is already running. Connect to it wit
         "run", "-i", "--rm",
         "-e", "KANBAN_URL=http://your-server",
         "-e", "KANBAN_API_KEY=your-api-key",
-        "ghcr.io/bunnyiesart/mcp-kanban:latest"
+        "ghcr.io/bunnyiesart/agentboard:latest mcp"
       ]
     }
   }
@@ -184,7 +185,7 @@ Windows: `%APPDATA%\Claude\claude_desktop_config.json`
         "run", "-i", "--rm",
         "-e", "KANBAN_URL=http://your-server",
         "-e", "KANBAN_API_KEY=your-api-key",
-        "ghcr.io/bunnyiesart/mcp-kanban:latest"
+        "ghcr.io/bunnyiesart/agentboard:latest mcp"
       ]
     }
   }
